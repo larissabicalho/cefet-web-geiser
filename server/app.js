@@ -1,29 +1,28 @@
-var express = require('express'),
-    app = express(),
-    fs = require('fs'),
- 	Handlebars = require('handlebars');
-
-var jogador, 					//get the content from jogadores.json
-   jogosPorJogador, 						//get the content from jogosPorJogador.json
- 	  notPlayedYet, 				//counter variable that counts the games that haven't been played yet by the player
- 	  orderedListOfGames, 		//get the list of games bought by a player and order it
-    player, 			//list of steamids
-    playerSteamId, 				//the player steamid
-    topFive, 					//get the 5 games most played by a player 
-    topPlayed, 					//get the game most played by a player
- 	 urlJogador = '/jogador/'; 	//auxiliar variable used in app.get
-
+var fs= require('fs');
 var _ = require('underscore');
+var express = require('express'),
+app = express();
 
-// carregar "banco de dados" (data/jogadores.json e dtaa/jogosPorJogador.json)
+var  player,	
+     games,							
+     notPlayedYet, 
+ 	   orderedListOfGames, 		
+     topFive, 					 
+     topPlayed;			
+
+// carregar "banco de dados" (data/jogadores.json e data/jogosPorJogador.json)
 // você pode colocar o conteúdo dos arquivos json no objeto "db" logo abaixo
 // dica: 3-4 linhas de código (você deve usar o módulo de filesystem (fs))
-jogador = JSON.parse(fs.readFileSync('server/data/jogadores.json')).players;
-jogosPorJogador 	= JSON.parse(fs.readFileSync('server/data/jogosPorJogador.json'));
+var db = {
+    jogadores: JSON.parse(fs.readFileSync(__dirname + "/data/jogadores.json")),
+	  jogosPorJogador: JSON.parse(fs.readFileSync(__dirname + "/data/jogosPorJogador.json"))
+};
+
 
 // configurar qual templating engine usar. Sugestão: hbs (handlebars)
 //app.set('view engine', '???');
 app.set('view engine', 'hbs');
+
 
 // EXERCÍCIO 2
 // definir rota para página inicial --> renderizar a view index, usando os
@@ -31,63 +30,47 @@ app.set('view engine', 'hbs');
 // dica: o handler desta função é bem simples - basta passar para o template
 //       os dados do arquivo data/jogadores.json
 app.set('views', 'server/views');
-
-app.get('/', function (req, res) {
-	res.render('index', {
-		jogador: jogador
-	});
-});
+app.get('/', function (req, res) {res.render('index', db.jogadores)});
 
 // EXERCÍCIO 3
 // definir rota para página de detalhes de um jogador --> renderizar a view
 // jogador, usando os dados do banco de dados "data/jogadores.json" e
 // "data/jogosPorJogador.json", assim como alguns campos calculados
 // dica: o handler desta função pode chegar a ter umas 15 linhas de código
+app.get('/jogador/:id/', function (req, res) {
 
-/**LÓGICA DE SELEÇÃO*/
-app.get(urlJogador + '*', function (req, res) {
-	calculateParameters(req);
-
-	res.render('jogador', {
+  calculateParameters(req);
+  res.render('jogador', {
 		player: 		player,
-		games: 			jogosPorJogador[playerSteamId],
+		games: 			games,
 		notPlayedYet: 	notPlayedYet,
 		favoriteGame: 	topPlayed,
 		topFive: 		topFive,
-	});
+  });
+  
 });
 
 function calculateParameters (req) {
-	jogador = JSON.parse(fs.readFileSync('server/data/jogadores.json')).players;
-	jogosPorJogador 	= JSON.parse(fs.readFileSync('server/data/jogosPorJogador.json'));
+  player = _.find(db.jogadores.players, function(id) {return id.steamid === req.params.id}); 
+  games = db.jogosPorJogador[req.params.id];  
 
-	player 				= _.find(jogador, function(num) { return req.url.indexOf(num.steamid) != -1 }); //return the steamids of all players
-	playerSteamId 		= _.find(Object.keys(jogosPorJogador), function(num) { return num == player.steamid }); //return the player steamid
-	orderedListOfGames 	= _.sortBy(jogosPorJogador[playerSteamId].games, 'playtime_forever'); //get the games bought by the player above
-  notPlayedYet 		= 0; //count variable
-  
-  notPlayedYet = 0;
-	topFive 			= _.map(_.chain(_.last(orderedListOfGames, [5])).reverse().value(), function (num) { 
-							num.playtime_forever = Math.round(num.playtime_forever/60); 
-							return num; }); //order the list 
-	topPlayed 			= [topFive[0], player.steamid]; //get the most played game by the player and add the player steamid to the list
-
-	//count the number of games not played by the person
-	for (var i = 0; i < jogosPorJogador[playerSteamId].games.length; i++)
-		if (jogosPorJogador[playerSteamId].games[i].playtime_forever == 0)
-			notPlayedYet++;
+  let gnp = _.where(games.games, {playtime_forever: 0});
+	notPlayedYet = gnp.length;
+    
+  orderedListOfGames = _.sortBy(games.games, 'playtime_forever');
+  topFive = _.map(_.chain(_.last(orderedListOfGames, [5])).reverse().value(), function (id) { 
+    id.playtime_forever = Math.round(id.playtime_forever/60); 
+      return id; }); 
+  topPlayed = [topFive[0], player.steamid]; 
 }
 
 
-//EXERCÍCIO 1
+// EXERCÍCIO 1
 // configurar para servir os arquivos estáticos da pasta "client"
 // dica: 1 linha de código
-app.use(express.static('client'));
+app.use(express.static('client/'));
 
 // abrir servidor na porta 3000
 // dica: 1-3 linhas de código
-
 app.listen(3000, function () {
-  console.log('Escutando na Porta 3000!!');
-});
-
+  console.log('Escutando na : http://localhost:3000')});
